@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 import SwiftData
 
 @main
@@ -22,3 +23,4 @@ struct LANSyncAppApp: App {
         .modelContainer(for: Unit.self)
     }
 }
+
