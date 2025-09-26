@@ -19,15 +19,24 @@ final class HostService: ObservableObject {
 
     func start(epoch: UInt64) throws -> UInt16 {
         self.epoch = epoch
+        print("HostService: Starting with epoch \(epoch)")
         let params = NWParameters.tcp
         listener = try NWListener(using: params, on: .any)
         listener?.newConnectionHandler = { [weak self] conn in
             self?.setup(conn)
         }
         listener?.stateUpdateHandler = { [weak self] state in
-            if case .ready = state { self?.port = self?.listener?.port }
+            print("HostService: Listener state changed to \(state)")
+            if case .ready = state { 
+                self?.port = self?.listener?.port 
+                print("HostService: Port ready: \(self?.port?.rawValue ?? 0)")
+            }
+            if case .failed(let error) = state {
+                print("HostService: Listener failed with error: \(error)")
+            }
         }
         listener?.start(queue: .main)
+        print("HostService: Listener started, initial port: \(listener?.port?.rawValue ?? 0)")
 
         // Heartbeats
         heartbeatTimer?.invalidate()
@@ -46,13 +55,22 @@ final class HostService: ObservableObject {
     }
 
     private func setup(_ conn: NWConnection) {
+        print("HostService: Setting up new connection from client")
         conns.append(conn)
         buffer[ObjectIdentifier(conn)] = Data()
-        conn.stateUpdateHandler = { state in
-            if case .failed = state { conn.cancel() }
+        conn.stateUpdateHandler = { [weak self] state in
+            print("HostService: Client connection state changed to \(state)")
+            if case .failed(let error) = state { 
+                print("HostService: Client connection failed: \(error)")
+                conn.cancel() 
+            }
+            if case .ready = state {
+                print("HostService: Client connection ready")
+            }
         }
         conn.start(queue: .main)
         receive(on: conn)
+        print("HostService: Total active connections: \(conns.count)")
     }
 
     private func receive(on conn: NWConnection) {
@@ -72,12 +90,17 @@ final class HostService: ObservableObject {
     }
 
     private func handle(message: FramedMessage, from conn: NWConnection) {
+        print("HostService: Received message type: \(message.type) from client")
         switch message.type {
         case .hello:
-            // accept
+            print("HostService: Received hello from client")
             return
         case .opPropose:
-            guard let data = message.payload, var op = try? JSONDecoder.lansync.decode(Op.self, from: data) else { return }
+            guard let data = message.payload, var op = try? JSONDecoder.lansync.decode(Op.self, from: data) else { 
+                print("HostService: Failed to decode op proposal")
+                return 
+            }
+            print("HostService: Received op proposal: \(op.opId)")
             // assign seq
             let seq = (try? OpLogStore.shared.assignSeqAndAppend(&op, epoch: epoch)) ?? (op.seq ?? 0)
             DiagnosticsModel.shared.latestSeq = seq
@@ -85,9 +108,11 @@ final class HostService: ObservableObject {
             let payload = try? JSONEncoder.lansync.encode(op)
             let msg = FramedMessage(type: .opBroadcast, payload: payload)
             if let d = try? MessageFramer.encode(msg) {
+                print("HostService: Broadcasting op to \(conns.count) clients")
                 for c in conns { c.send(content: d, completion: .contentProcessed({ _ in })) }
             }
         default:
+            print("HostService: Unhandled message type: \(message.type)")
             return
         }
     }
@@ -101,6 +126,7 @@ final class HostService: ObservableObject {
         let payload = try? JSONEncoder.lansync.encode(hb)
         let msg = FramedMessage(type: .heartbeat, payload: payload)
         guard let d = try? MessageFramer.encode(msg) else { return }
+        print("HostService: Broadcasting heartbeat to \(conns.count) clients")
         for c in conns { c.send(content: d, completion: .contentProcessed({ _ in })) }
     }
 }
