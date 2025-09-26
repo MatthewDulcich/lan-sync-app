@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct JoinView: View {
     @EnvironmentObject var session: SessionManager
