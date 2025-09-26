@@ -6,12 +6,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
-struct lan_sync_appApp: App {
+struct LANSyncAppApp: App {
+    @StateObject private var sessionManager = SessionManager()
+    @StateObject private var diagnostics = DiagnosticsModel.shared
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(sessionManager)
+                .environmentObject(diagnostics)
         }
+        .modelContainer(for: Unit.self)
     }
 }

@@ -8,17 +8,30 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var session: SessionManager
+    @EnvironmentObject var diag: DiagnosticsModel
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        NavigationStack {
+            VStack(spacing: 16) {
+                SessionHeaderView()
+                Divider()
+                ModeSelectorView()
+                Divider()
+                ContentListView()
+                Divider()
+                NavigationLink("Diagnostics") { DiagnosticsView() }
+                NavigationLink("Settings") { SettingsView() }
+            }
+            .overlay(ContextBridge().hidden())
+            .padding()
+            .navigationTitle("LAN Sync")
         }
-        .padding()
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(SessionManager())
+        .environmentObject(DiagnosticsModel.shared)
 }

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		7B97A6DD2E86315A0046EDF2 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 7B97A6DC2E86315A0046EDF2 /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		7BF5EA9E2E862370009DC29B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		7B97A6DC2E86315A0046EDF2 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		7BF5EA902E86236E009DC29B /* lan-sync-app.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "lan-sync-app.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7BF5EA9D2E862370009DC29B /* lan-sync-appTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "lan-sync-appTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7BF5EAA72E862370009DC29B /* lan-sync-appUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "lan-sync-appUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -79,6 +84,7 @@
 				7BF5EAA02E862370009DC29B /* lan-sync-appTests */,
 				7BF5EAAA2E862370009DC29B /* lan-sync-appUITests */,
 				7BF5EA912E86236E009DC29B /* Products */,
+				7B97A6DC2E86315A0046EDF2 /* README.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7B97A6DD2E86315A0046EDF2 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
