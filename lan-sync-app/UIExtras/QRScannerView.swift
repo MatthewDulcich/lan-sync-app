@@ -1,6 +1,9 @@
 import SwiftUI
 import AVFoundation
 
+#if canImport(UIKit)
+import UIKit
+
 struct QRScannerView: UIViewControllerRepresentable {
     static var isSupported: Bool {
         #if targetEnvironment(simulator)
@@ -64,3 +67,22 @@ struct QRScannerView: UIViewControllerRepresentable {
         }
     }
 }
+
+#else
+
+// Fallback for platforms without UIKit (e.g., macOS AppKit build)
+struct QRScannerView: View {
+    static var isSupported: Bool { false }
+    var onDetect: (String) -> Void
+
+    init(onDetect: @escaping (String) -> Void) {
+        self.onDetect = onDetect
+    }
+
+    var body: some View {
+        // No camera scanning on this platform
+        EmptyView()
+    }
+}
+
+#endif
