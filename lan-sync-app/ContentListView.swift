@@ -34,6 +34,7 @@ struct ContentListView: View {
                     Button("Unclaim") { session.unclaim(recordID: item.id) }
                     Button("Toggle Verified") { session.setVerified(recordID: item.id, value: !item.isVerified) }
                     Button("Fetch Image") { session.prefetcher.fetchNow(blobHash: item.blobHash) }
+                    Button(role: .destructive) { session.deleteUnit(recordID: item.id) } label: { Label("Delete", systemImage: "trash") }
                 }
             }
         }
