@@ -25,20 +25,17 @@ struct QRCodeView: View {
     let text: String
     var body: some View {
         if let img = makeQR(text: text) {
-            Image(uiImage: img).interpolation(.none).resizable().scaledToFit()
+            Image(decorative: img, scale: 1, orientation: .up).interpolation(.none).resizable().scaledToFit()
         } else {
             Text("QR generation failed")
         }
     }
-    func makeQR(text: String) -> UIImage? {
+    func makeQR(text: String) -> CGImage? {
         let f = CIFilter.qrCodeGenerator()
         f.setValue(Data(text.utf8), forKey: "inputMessage")
         guard let out = f.outputImage else { return nil }
         let scaled = out.transformed(by: CGAffineTransform(scaleX: 6, y: 6))
         let ctx = CIContext()
-        if let cg = ctx.createCGImage(scaled, from: scaled.extent) {
-            return UIImage(cgImage: cg)
-        }
-        return nil
+        return ctx.createCGImage(scaled, from: scaled.extent)
     }
 }
