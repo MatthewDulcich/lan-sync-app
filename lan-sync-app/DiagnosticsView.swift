@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 final class DiagnosticsModel: ObservableObject {
     static let shared = DiagnosticsModel()
