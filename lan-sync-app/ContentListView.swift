@@ -26,7 +26,7 @@ struct ContentListView: View {
                     if let hash = item.blobHash, !hash.isEmpty {
                         Image(systemName: "photo")
                     } else {
-                        Image(systemName: "photo.slash")
+                        Image(systemName: "photo.badge.plus")
                     }
                 }
                 .contextMenu {
@@ -48,23 +48,16 @@ struct ContentListView: View {
     }
 
     private func addFake() {
-        let u = Unit(id: UUID(),
-                     answer: nil,
-                     eventDate: .now,
-                     eventName: "Sample Event",
-                     blobHash: nil,
-                     isVerified: false,
-                     isProcessing: false,
-                     isChallenged: false,
-                     isIllegible: false,
-                     questionNumber: 1,
-                     teamClub: "Club A",
-                     teamCode: "A01",
-                     teamName: "Team A",
-                     timeStamp: .now,
-                     lastEditor: "Seeder@Device")
-        context.insert(u)
-        try? context.save()
+        // Use operation-based creation instead of direct SwiftData manipulation
+        let initial: [String: FieldValue] = [
+            "eventName": .string("Sample Event"),
+            "questionNumber": .int(1),
+            "teamClub": .string("Club A"),
+            "teamCode": .string("A01"),
+            "teamName": .string("Team A"),
+            "answer": .string("Sample answer")
+        ]
+        session.createUnit(initial: initial)
     }
 }
 

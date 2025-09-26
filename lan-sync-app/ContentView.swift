@@ -16,6 +16,18 @@ struct ContentView: View {
         NavigationStack {
             VStack(spacing: 16) {
                 SessionHeaderView()
+                
+                if let error = session.lastError {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
+                        .onTapGesture {
+                            session.lastError = nil
+                        }
+                }
+                
                 Divider()
                 ModeSelectorView()
                 Divider()

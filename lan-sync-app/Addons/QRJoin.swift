@@ -12,8 +12,13 @@ struct SessionJoinInfo: Codable {
 
 enum QRJoinCodec {
     static func encode(_ info: SessionJoinInfo) -> String {
-        let data = try! JSONEncoder.lansync.encode(info)
-        return data.base64EncodedString()
+        do {
+            let data = try JSONEncoder.lansync.encode(info)
+            return data.base64EncodedString()
+        } catch {
+            print("QRJoinCodec: Failed to encode session info: \(error)")
+            return ""
+        }
     }
     static func decode(_ str: String) -> SessionJoinInfo? {
         guard let data = Data(base64Encoded: str) else { return nil }
