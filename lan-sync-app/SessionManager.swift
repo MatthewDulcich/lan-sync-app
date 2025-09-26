@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import SwiftData
 import Network
+import Combine
 
 @MainActor
 final class SessionManager: ObservableObject {
@@ -31,8 +32,7 @@ final class SessionManager: ObservableObject {
     // Singleton handle for other layers (e.g., Replicator.enqueueLocal uses this)
     static var shared: SessionManager!
 
-    override init() {
-        super.init()
+    init() {
         SessionManager.shared = self
     }
 
@@ -40,7 +40,7 @@ final class SessionManager: ObservableObject {
 
     func startHosting() {
         if sessionID == nil { sessionID = UUID().uuidString }
-        setGlobalSessionID(sessionID!)
+        SessionManager.globalSessionID = sessionID!
         epoch &+= 1
         isHost = true
         currentHostID = userDisplayName
@@ -85,7 +85,7 @@ final class SessionManager: ObservableObject {
 
     func join(with info: SessionJoinInfo) {
         self.sessionID = info.sessionID
-        setGlobalSessionID(info.sessionID)
+        SessionManager.globalSessionID = info.sessionID
         self.isHost = false
         self.currentHostID = "Host@\(info.host)"
         self.epoch = max(self.epoch, info.epoch)
@@ -144,16 +144,16 @@ final class SessionManager: ObservableObject {
             // Loopback propose to HostService so peers get the broadcast
             guard let port = HostService.shared.port else { return }
             let host = NWEndpoint.Host.ipv4(IPv4Address("127.0.0.1")!)
-            let tempVS = VerifierService()
-            tempVS.connect(host: host,
-                           port: port,
-                           deviceID: deviceID,
-                           userDisplayName: userDisplayName,
-                           sessionID: sessionID ?? "UNSET",
-                           epochSeen: epoch)
+            let vs = VerifierService.shared
+            vs.connect(host: host,
+                       port: port,
+                       deviceID: deviceID,
+                       userDisplayName: userDisplayName,
+                       sessionID: sessionID ?? "UNSET",
+                       epochSeen: epoch)
             // After ready, send proposal (slight delay to give connection time)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                tempVS.propose(op: op)
+                vs.propose(op: op)
             }
         } else {
             VerifierService.shared.propose(op: op)
@@ -236,7 +236,7 @@ enum Host {
 #if canImport(AppKit)
 import AppKit
 enum HostNameProvider {
-    static func macHostName() -> String { Host.current().localizedName ?? "Mac" }
+    static func macHostName() -> String { Foundation.Host.current().localizedName ?? "Mac" }
 }
 #endif
 
@@ -248,6 +248,6 @@ import UIKit
 
 extension SessionManager {
     static var globalSessionID: String?
-    func setGlobalSessionID(_ s: String) { SessionManager.globalSessionID = s }
     static var sharedSessionID: String { SessionManager.globalSessionID ?? "UNSET" }
 }
+
