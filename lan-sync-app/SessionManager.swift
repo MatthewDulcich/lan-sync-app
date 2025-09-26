@@ -14,6 +14,7 @@ final class SessionManager: ObservableObject {
     @Published var epoch: UInt64 = 0
     @Published var currentHostID: String?
     @Published var isHost: Bool = false
+    @Published var lastError: String?
 
     // MARK: - Identity
     let deviceID: String = String(UUID().uuidString.prefix(6))
@@ -30,22 +31,27 @@ final class SessionManager: ObservableObject {
     private var blobPort: NWEndpoint.Port?
 
     // Singleton handle for other layers (e.g., Replicator.enqueueLocal uses this)
-    static var shared: SessionManager!
+    static var shared: SessionManager? = nil
 
     init() {
         SessionManager.shared = self
+        validatePlistConfiguration()
     }
 
     // MARK: - Hosting
 
     func startHosting() {
         if sessionID == nil { sessionID = UUID().uuidString }
-        SessionManager.globalSessionID = sessionID!
+        guard let sessionID = sessionID else {
+            print("SessionManager: Failed to create sessionID")
+            return
+        }
+        SessionManager.globalSessionID = sessionID
         epoch &+= 1
         isHost = true
         currentHostID = userDisplayName
         DiagnosticsModel.shared.isHost = true
-        DiagnosticsModel.shared.sessionID = sessionID!
+        DiagnosticsModel.shared.sessionID = sessionID
         DiagnosticsModel.shared.epoch = epoch
         DiagnosticsModel.shared.hostID = currentHostID ?? ""
 
@@ -64,26 +70,37 @@ final class SessionManager: ObservableObject {
         }
 
         // Advertise via Bonjour
-        if let mp = metaPort?.rawValue, let bp = blobPort?.rawValue {
-            PeerDiscovery.shared.startAdvertising(name: currentHostID ?? "Host", metaPort: Int32(mp), blobPort: Int32(bp))
-        }
+        advertiseWhenReady()
     }
 
     // MARK: - Join via QR (or programmatically)
 
     func joinViaQR() {
+        // Clear any previous error
+        lastError = nil
+        
         // Placeholder: try to decode a Base64 JSON from clipboard (developer convenience)
         #if canImport(UIKit)
-        if let s = UIPasteboard.general.string, let info = QRJoinCodec.decode(s) {
-            join(with: info)
-            return
+        do {
+            if let s = UIPasteboard.general.string, let info = QRJoinCodec.decode(s) {
+                join(with: info)
+                return
+            }
+        } catch {
+            print("joinViaQR(): Clipboard access error: \(error)")
         }
         #endif
-        // Fallback: demo defaults (adjust as needed)
-        print("joinViaQR(): No QR in clipboard; please call join(with:) after scanning.")
+        // Provide user feedback for missing QR
+        lastError = "No QR code found in clipboard. Please use Settings → Join via QR to scan a QR code, or copy a QR code to clipboard first."
+        print("joinViaQR(): No QR in clipboard; please use proper QR scanner or copy QR to clipboard.")
     }
 
     func join(with info: SessionJoinInfo) {
+        print("SessionManager: Attempting to join session")
+        print("SessionManager: SessionID: \(info.sessionID)")
+        print("SessionManager: Host: \(info.host):\(info.port)")
+        print("SessionManager: Epoch: \(info.epoch)")
+        
         self.sessionID = info.sessionID
         SessionManager.globalSessionID = info.sessionID
         self.isHost = false
@@ -95,7 +112,12 @@ final class SessionManager: ObservableObject {
         DiagnosticsModel.shared.hostID = self.currentHostID ?? ""
 
         let host = NWEndpoint.Host(info.host)
-        guard let port = NWEndpoint.Port(rawValue: info.port) else { return }
+        guard let port = NWEndpoint.Port(rawValue: info.port) else { 
+            print("SessionManager: Invalid port: \(info.port)")
+            return 
+        }
+        
+        print("SessionManager: Starting VerifierService connection...")
         VerifierService.shared.connect(host: host,
                                        port: port,
                                        deviceID: deviceID,
@@ -127,9 +149,7 @@ final class SessionManager: ObservableObject {
         } catch {
             print("BlobServer start failed: \(error)")
         }
-        if let mp = metaPort?.rawValue, let bp = blobPort?.rawValue {
-            PeerDiscovery.shared.startAdvertising(name: currentHostID ?? "Host", metaPort: Int32(mp), blobPort: Int32(bp))
-        }
+        advertiseWhenReady()
     }
 
     // MARK: - Proposing Ops
@@ -143,7 +163,11 @@ final class SessionManager: ObservableObject {
         if isHost {
             // Loopback propose to HostService so peers get the broadcast
             guard let port = HostService.shared.port else { return }
-            let host = NWEndpoint.Host.ipv4(IPv4Address("127.0.0.1")!)
+            guard let ipv4 = IPv4Address("127.0.0.1") else {
+                print("SessionManager: Failed to create localhost address")
+                return
+            }
+            let host = NWEndpoint.Host.ipv4(ipv4)
             let vs = VerifierService.shared
             vs.connect(host: host,
                        port: port,
@@ -218,6 +242,48 @@ final class SessionManager: ObservableObject {
         let op = Op(epoch: epoch, seq: nil, opId: UUID(), authorDevice: userDisplayName, time: Date(),
                     kind: .deleteUnit, recordID: recordID)
         propose(op)
+    }
+    
+    // Wait for HostService/BlobServer ports to be ready before advertising via Bonjour
+    private func advertiseWhenReady(retries: Int = 50) { // ~10s at 0.2s intervals
+        if let mp = HostService.shared.port?.rawValue, let bp = BlobServer.shared.port?.rawValue {
+            self.metaPort = HostService.shared.port
+            self.blobPort = BlobServer.shared.port
+            PeerDiscovery.shared.startAdvertising(name: currentHostID ?? "Host", metaPort: Int32(mp), blobPort: Int32(bp))
+            return
+        }
+        guard retries > 0 else {
+            print("SessionManager: ports not ready; advertising skipped")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.advertiseWhenReady(retries: retries - 1)
+        }
+    }
+
+    // MARK: - Runtime validation for required permissions
+    private func validatePlistConfiguration() {
+        #if os(iOS) || os(tvOS) || os(watchOS) || targetEnvironment(macCatalyst)
+        let info = Bundle.main.infoDictionary ?? [:]
+        if info["NSLocalNetworkUsageDescription"] == nil {
+            print("[Config] Missing NSLocalNetworkUsageDescription in Info.plist. Local Network permission prompt will not appear.")
+            print("[Config] Add this to your target's Info tab: NSLocalNetworkUsageDescription = 'This app needs local network access to sync data between devices'")
+        }
+        if let services = info["NSBonjourServices"] as? [String] {
+            let expected = [PeerDiscovery.metaServiceType, PeerDiscovery.blobServiceType]
+            for s in expected where !services.contains(s) {
+                print("[Config] NSBonjourServices is missing service type: \(s)")
+                print("[Config] Add these to NSBonjourServices array: _lansyncmeta._tcp, _lansyncblob._tcp")
+            }
+        } else {
+            print("[Config] Missing NSBonjourServices array in Info.plist. Bonjour advertise/browse may be blocked on iOS 14+.")
+            print("[Config] SOLUTION: In Xcode, go to your target's Info tab and add NSBonjourServices array with: _lansyncmeta._tcp, _lansyncblob._tcp")
+        }
+        #endif
+        #if os(macOS) && !targetEnvironment(macCatalyst)
+        // Note: For sandboxed macOS apps, enable App Sandbox with network client/server entitlements.
+        print("[Config] macOS: Ensure App Sandbox is enabled with com.apple.security.network.client and .server in the target entitlements.")
+        #endif
     }
 }
 

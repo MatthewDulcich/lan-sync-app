@@ -29,10 +29,29 @@ struct HostQRView: View {
     }
 
     private func prepareQR() {
-        guard session.isHost else { error = "Not hosting. Tap ‘Become Host’ first."; return }
+        guard session.isHost else { error = "Not hosting. Tap 'Become Host' first."; return }
         guard let sessionID = session.sessionID else { error = "Missing Session ID"; return }
-        guard let metaPort = HostService.shared.port?.rawValue else { error = "Host metadata port not ready"; return }
-        guard let hostIP = NetworkInterfaces.primaryIPv4() else { error = "No LAN IPv4 found"; return }
+        
+        // Debug: Check if HostService was even attempted to start
+        print("HostQRView: Checking HostService port...")
+        print("HostQRView: HostService.shared.port = \(String(describing: HostService.shared.port))")
+        
+        // Wait briefly for HostService port if not ready yet
+        guard let metaPort = HostService.shared.port?.rawValue else {
+            print("HostQRView: waiting for HostService port...")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.prepareQR()
+            }
+            return
+        }
+        print("HostQRView: HostService port ready: \(metaPort)")
+        
+        guard let hostIP = NetworkInterfaces.primaryIPv4() else { 
+            error = "No LAN IPv4 found. Check network connection."
+            print("HostQRView: Failed to find LAN IPv4 address")
+            return 
+        }
+        print("HostQRView: Found LAN IP: \(hostIP)")
 
         let secret = SessionSecretProvider.ensureSessionSecret()
         let info = SessionJoinInfo(sessionID: sessionID,
@@ -41,6 +60,7 @@ struct HostQRView: View {
                                    secret: secret,
                                    epoch: session.epoch)
         joinString = QRJoinCodec.encode(info)
+        print("HostQRView: QR generated successfully")
     }
 }
 
@@ -62,35 +82,82 @@ enum SessionSecretProvider {
 enum NetworkInterfaces {
     static func primaryIPv4() -> String? {
         #if os(iOS) || os(tvOS) || os(watchOS) || targetEnvironment(macCatalyst)
-        return getAddress(prefer:"en0") ?? getAddress(prefer:"eth0") ?? getAddress(prefer:nil)
+        return getAddress(prefer:"en0") ?? getAddress(prefer:"eth0") ?? getNonLoopbackAddress()
         #else
-        return getAddress(prefer:nil)
+        return getNonLoopbackAddress() ?? getAddress(prefer:"en0") ?? getAddress(prefer:"eth0")
         #endif
+    }
+    
+    private static func getNonLoopbackAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+        
+        var ptr = ifaddr
+        while ptr != nil {
+            defer { ptr = ptr?.pointee.ifa_next }
+            guard let interface = ptr?.pointee else { continue }
+            
+            let name = String(cString: interface.ifa_name)
+            guard let addr = interface.ifa_addr else { continue }
+            let addrFamily = addr.pointee.sa_family
+            
+            // Skip loopback and non-IPv4 interfaces
+            guard addrFamily == UInt8(AF_INET) else { continue }
+            guard !name.starts(with: "lo") else { continue }
+            
+            // Use getnameinfo for safe IP address conversion
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            let result = getnameinfo(addr, socklen_t(addr.pointee.sa_len),
+                                   &hostname, socklen_t(hostname.count),
+                                   nil, socklen_t(0), NI_NUMERICHOST)
+            
+            if result == 0 {
+                let ipString = String(cString: hostname)
+                // Skip localhost and APIPA addresses
+                if !ipString.starts(with: "127.") && !ipString.starts(with: "169.254.") {
+                    print("Found LAN IP: \(ipString) on interface: \(name)")
+                    address = ipString
+                    break
+                }
+            }
+        }
+        return address
     }
 
     private static func getAddress(prefer: String?) -> String? {
-        var address : String?
-        var ifaddr : UnsafeMutablePointer<ifaddrs>? = nil
-        if getifaddrs(&ifaddr) == 0 {
-            var ptr = ifaddr
-            while ptr != nil {
-                defer { ptr = ptr?.pointee.ifa_next }
-                guard let interface = ptr?.pointee else { continue }
-                let name = String(cString: interface.ifa_name)
-                if let prefer, name != prefer { continue }
-                let addrFamily = interface.ifa_addr.pointee.sa_family
-                if addrFamily == UInt8(AF_INET) { // IPv4
-                    var addr = interface.ifa_addr.pointee
-                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    if (getnameinfo(&addr, socklen_t(interface.ifa_addr.pointee.sa_len),
-                                    &hostname, socklen_t(hostname.count),
-                                    nil, socklen_t(0), NI_NUMERICHOST) == 0) {
-                        address = String(cString: hostname)
-                        break
-                    }
-                }
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        
+        guard getifaddrs(&ifaddr) == 0 else { return nil }
+        defer { freeifaddrs(ifaddr) }
+        
+        var ptr = ifaddr
+        while ptr != nil {
+            defer { ptr = ptr?.pointee.ifa_next }
+            guard let interface = ptr?.pointee else { continue }
+            
+            let name = String(cString: interface.ifa_name)
+            if let prefer, name != prefer { continue }
+            
+            guard let addr = interface.ifa_addr else { continue }
+            let addrFamily = addr.pointee.sa_family
+            
+            // Only handle IPv4
+            guard addrFamily == UInt8(AF_INET) else { continue }
+            
+            // Use getnameinfo for safe IP address conversion
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            let result = getnameinfo(addr, socklen_t(addr.pointee.sa_len),
+                                   &hostname, socklen_t(hostname.count),
+                                   nil, socklen_t(0), NI_NUMERICHOST)
+            
+            if result == 0 {
+                address = String(cString: hostname)
+                break
             }
-            freeifaddrs(ifaddr)
         }
         return address
     }
