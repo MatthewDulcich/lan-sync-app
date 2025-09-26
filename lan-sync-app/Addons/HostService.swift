@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Network
 import SwiftUI
 
@@ -104,9 +105,3 @@ final class HostService: ObservableObject {
     }
 }
 
-// Convenience to access sessionID (set by SessionManager)
-extension SessionManager {
-    static var sharedSessionID: String { SessionManager.globalSessionID ?? "UNSET" }
-    private static var globalSessionID: String?
-    func setGlobalSessionID(_ s: String) { SessionManager.globalSessionID = s }
-}
