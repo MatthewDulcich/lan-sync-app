@@ -18,7 +18,7 @@ final class Replicator {
 
     // Convenience if views still call enqueueLocal
     func enqueueLocal(_ op: Op) {
-        SessionManager.shared.propose(op)
+        SessionManager.shared?.propose(op)
     }
 
     // Apply received/broadcast op (host-ordered by seq) or optimistic local op
