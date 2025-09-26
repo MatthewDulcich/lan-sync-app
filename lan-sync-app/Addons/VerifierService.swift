@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Combine
 
 final class VerifierService: ObservableObject {
     static let shared = VerifierService()
@@ -76,3 +77,4 @@ final class VerifierService: ObservableObject {
         }
     }
 }
+
