@@ -1,8 +1,12 @@
+#if false
+// Disabled: This stub collided with the real implementation in Replicator.swift and caused
+// "Ambiguous use of 'injectContext'" at call sites. Keep only the real method.
 import Foundation
 import SwiftData
 
 extension Replicator {
     func injectContext(_ ctx: ModelContext) {
-        _ = ctx // hold a weak/global reference if you restructure; demo keeps existing apply() signature
+        _ = ctx // placeholder (disabled)
     }
 }
+#endif
