@@ -3,7 +3,7 @@ import SwiftData
 
 struct ContentListView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \[SortDescriptor(\.timeStamp, order: .reverse)]) var items: [Unit]
+    @Query(sort: [SortDescriptor(\Unit.timeStamp, order: .reverse)]) var items: [Unit]
     @State private var selection: Unit?
     @EnvironmentObject var session: SessionManager
     @EnvironmentObject var diag: DiagnosticsModel
@@ -32,7 +32,7 @@ struct ContentListView: View {
                 .contextMenu {
                     Button("Claim/Lock") { session.claim(recordID: item.id) }
                     Button("Unclaim") { session.unclaim(recordID: item.id) }
-                    Button("Toggle Verified") { session.toggleVerified(recordID: item.id) }
+                    Button("Toggle Verified") { session.setVerified(recordID: item.id, value: !item.isVerified) }
                     Button("Fetch Image") { session.prefetcher.fetchNow(blobHash: item.blobHash) }
                 }
             }
